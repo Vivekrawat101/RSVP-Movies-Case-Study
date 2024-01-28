@@ -136,7 +136,9 @@ select genre, count(m.id) as movies_count
 from movie m
          inner join genre g on m.id = g.movie_id
 group by genre
-order by movies_count desc limit 1;
+order by movies_count desc
+limit 1;
+
 
 
 
@@ -148,6 +150,13 @@ So, let’s find out the count of movies that belong to only one genre.*/
 -- Q7. How many movies belong to only one genre?
 -- Type your code below:
 
+with cte as (select *
+             from movie m
+                      inner join genre g on m.id = g.movie_id
+             group by g.movie_id
+             having count(g.movie_id) = 1)
+select count(*) as movies_with_one_genre
+from cte;
 
 
 
@@ -176,6 +185,12 @@ Now, let's find out the possible duration of RSVP Movies’ next project.*/
 +---------------+-------------------+ */
 -- Type your code below:
 
+select g.genre, round(avg(duration), 2) as avg_duration
+from movie m
+         inner join genre g on m.id = g.movie_id
+group by genre
+order by avg_duration;
+
 
 
 
@@ -200,7 +215,12 @@ Lets find where the movies of genre 'thriller' on the basis of number of movies.
 -- Type your code below:
 
 
-
+with cte as (select genre, count(*) as movie_count, rank() over (order by count(*) desc) as genre_rank
+             from genre
+             group by genre)
+select *
+from cte
+where genre = 'Thriller';
 
 
 
@@ -212,7 +232,6 @@ Lets find where the movies of genre 'thriller' on the basis of number of movies.
  In the previous segment, you analysed the movies and genres tables. 
  In this segment, you will analyse the ratings table as well.
 To start with lets get the min and max values of different columns in the table*/
-
 
 
 
@@ -230,6 +249,14 @@ To start with lets get the min and max values of different columns in the table*
 +---------------+-------------------+---------------------+----------------------+-----------------+-----------------+*/
 -- Type your code below:
 
+
+select min(avg_rating),
+       max(avg_rating),
+       min(total_votes),
+       max(total_votes),
+       min(median_rating),
+       max(median_rating)
+from ratings;
 
 
 
@@ -254,6 +281,10 @@ Now, let’s find out the top 10 movies based on average rating.*/
 -- Type your code below:
 -- It's ok if RANK() or DENSE_RANK() is used too
 
+select title, avg_rating, dense_rank() over (order by avg_rating desc) as movie_rank
+from movie m
+         inner join ratings r on m.id = r.movie_id
+limit 10;
 
 
 
@@ -278,6 +309,10 @@ Summarising the ratings table based on the movie counts by median rating can giv
 -- Type your code below:
 -- Order by is good to have
 
+select median_rating, count(*) as movie_count
+from ratings
+group by median_rating
+order by movie_count desc;
 
 
 
@@ -299,10 +334,17 @@ Now, let's find out the production house with which RSVP Movies can partner for 
 +------------------+-------------------+---------------------+*/
 -- Type your code below:
 
-
-
-
-
+with cte as (select production_company,
+                    count(*)                                   as movie_count,
+                    dense_rank() over (order by count(*) desc) as prod_company_rank
+             from movie m
+                      inner join ratings r on m.id = r.movie_id
+             where avg_rating > 8
+               and production_company is not null
+             group by production_company)
+select *
+from cte
+where prod_company_rank = 1;
 
 
 
@@ -321,6 +363,15 @@ Now, let's find out the production house with which RSVP Movies can partner for 
 |	.			|		.			|
 +---------------+-------------------+ */
 -- Type your code below:
+
+select genre, count(id) as movie_count
+from movie m
+         inner join genre g on m.id = g.movie_id
+         inner join ratings r on m.id = r.movie_id
+where (date_published like '2017-03%')
+  and (country like '%USA%')
+  and total_votes > 1000
+group by genre order by movie_count desc;
 
 
 
@@ -343,9 +394,23 @@ Now, let's find out the production house with which RSVP Movies can partner for 
 +---------------+-------------------+---------------------+*/
 -- Type your code below:
 
+select title, avg_rating, genre
+from movie m
+         inner join genre g on m.id = g.movie_id
+         inner join ratings r on m.id = r.movie_id
+where title like 'The%'
+and avg_rating > 8
+order by avg_rating desc;
 
 
 
+select title, median_rating, genre
+from movie m
+         inner join genre g on m.id = g.movie_id
+         inner join ratings r on m.id = r.movie_id
+where title like 'The%'
+and median_rating > 8
+order by median_rating desc;
 
 
 
@@ -354,6 +419,12 @@ Now, let's find out the production house with which RSVP Movies can partner for 
 -- You should also try your hand at median rating and check whether the ‘median rating’ column gives any significant insights.
 -- Q16. Of the movies released between 1 April 2018 and 1 April 2019, how many were given a median rating of 8?
 -- Type your code below:
+
+select  count(*) as movies_count_with_median_rating_8
+from movie m
+         inner join ratings r on m.id = r.movie_id
+where date_published between '2018-04-01' AND '2019-04-01'
+and median_rating = 8;
 
 
 
@@ -368,11 +439,56 @@ Now, let's find out the production house with which RSVP Movies can partner for 
 -- Hint: Here you have to find the total number of votes for both German and Italian movies.
 -- Type your code below:
 
+-- Approach 1 : I am using stored procedure to display which country has the highest votes
+
+delimiter //
+
+-- Creating the stored procedure
+create procedure CompareVotes()
+begin
+
+    declare germany_votes int;
+    declare italy_votes int;
+
+    -- Get votes for Germany
+    select sum(total_votes) into germany_votes
+    from movie m
+         inner join ratings r on m.id = r.movie_id
+    where country = 'Germany';
+
+    -- Get votes for Italy
+    select sum(total_votes) into italy_votes
+    from movie m
+         inner join ratings r on m.id = r.movie_id
+    where country = 'Italy';
+
+    -- Compare votes and print result
+    if germany_votes > italy_votes then
+        select 'Germany votes are greater than Italy' as comparison_result;
+    elseif italy_votes > germany_votes then
+        select 'Italy votes are greater than Germany' as comparison_result;
+    else
+        select 'Votes are equal' as comparison_result;
+    end if;
+end //
+
+-- Reset delimiter back to semicolon
+delimiter ;
+
+-- directly run CompareVotes() from below
+call CompareVotes();
 
 
 
+-- Approach 2 : using basic group by and aggregate function to find insights
 
-
+SELECT m.country,
+       Sum(r.total_votes) AS total_votes
+FROM   movie m
+       INNER JOIN ratings r
+               ON r.movie_id = m.id
+WHERE  m.country IN ( "GERMANY", "ITALY" )
+GROUP  BY m.country;
 
 
 -- Answer is Yes
@@ -396,10 +512,13 @@ Let’s begin by searching for null values in the tables.*/
 +---------------+-------------------+---------------------+----------------------+*/
 -- Type your code below:
 
-
-
-
-
+select
+    count(case when name is null then 1 end) as name_nulls,
+    count(case when height is null then 1 end) as height_nulls,
+    count(case when date_of_birth is null then 1 end) as date_of_birth_nulls,
+    count(case when known_for_movies is null then 1 end) as known_for_movies_nulls
+from
+    names;
 
 
 
@@ -421,12 +540,52 @@ Let’s find out the top three directors in the top three genres who can be hire
 -- Type your code below:
 
 
+select name , genre, count(m.id) as movie_count
+from movie m
+         inner join ratings r on m.id = r.movie_id
+         inner join genre g on m.id = g.movie_id
+         inner join director_mapping dm on g.movie_id = dm.movie_id
+         inner join names n on dm.name_id = n.id
+where avg_rating>8 group by name,genre order by movie_count desc;
+-- Q19. Who are the top three directors in the top three genres whose movies have an average rating > 8?
+-- (Hint: The top three genres would have the most number of movies with an average rating > 8.)
+
+select name,genre, count(*) as total_movies
+from movie m
+    inner join genre g on m.id = g.movie_id
+    inner join ratings r on m.id = r.movie_id
+    inner join director_mapping dm on g.movie_id = dm.movie_id
+    inner join names n on dm.name_id = n.id
+where avg_rating>8
+group by name,genre order by total_movies desc;
 
 
-
-
-
-
+WITH top_3_genres AS
+(
+           SELECT     genre,
+                      Count(m.id)                            AS movie_count ,
+                      Rank() OVER(ORDER BY Count(m.id) DESC) AS genre_rank
+           FROM       movie                                  AS m
+           INNER JOIN genre                                  AS g
+           ON         g.movie_id = m.id
+           INNER JOIN ratings AS r
+           ON         r.movie_id = m.id
+           WHERE      avg_rating > 8
+           GROUP BY   genre limit 3 )
+SELECT     n.NAME            AS director_name ,
+           Count(d.movie_id) AS movie_count
+FROM       director_mapping  AS d
+INNER JOIN genre G
+using     (movie_id)
+INNER JOIN names AS n
+ON         n.id = d.name_id
+INNER JOIN top_3_genres
+using     (genre)
+INNER JOIN ratings
+using      (movie_id)
+WHERE      avg_rating > 8
+GROUP BY   NAME
+ORDER BY   movie_count DESC limit 3 ;
 
 /* James Mangold can be hired as the director for RSVP's next project. Do you remeber his movies, 'Logan' and 'The Wolverine'. 
 Now, let’s find out the top two actors.*/
@@ -442,7 +601,16 @@ Now, let’s find out the top two actors.*/
 +---------------+-------------------+ */
 -- Type your code below:
 
-
+select name, count(*) as movie_count
+from movie m
+         inner join ratings r on m.id = r.movie_id
+         inner join role_mapping rm on m.id = rm.movie_id
+         inner join names n on rm.name_id = n.id
+where median_rating >= 8
+  and category = 'actor'
+group by name
+order by movie_count desc
+limit 2 ;
 
 
 
