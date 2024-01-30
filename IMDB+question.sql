@@ -540,32 +540,35 @@ Let’s find out the top three directors in the top three genres who can be hire
 -- Type your code below:
 
 
-WITH top_3_genres AS
-(
-           SELECT     genre,
-                      Count(m.id)                            AS movie_count ,
-                      Rank() OVER(ORDER BY Count(m.id) DESC) AS genre_rank
-           FROM       movie                                  AS m
-           INNER JOIN genre                                  AS g
-           ON         g.movie_id = m.id
-           INNER JOIN ratings AS r
-           ON         r.movie_id = m.id
-           WHERE      avg_rating > 8
-           GROUP BY   genre limit 3 )
-SELECT     n.NAME            AS director_name ,
-           Count(d.movie_id) AS movie_count
-FROM       director_mapping  AS d
-INNER JOIN genre G
-using     (movie_id)
-INNER JOIN names AS n
-ON         n.id = d.name_id
-INNER JOIN top_3_genres
-using     (genre)
-INNER JOIN ratings
-using      (movie_id)
-WHERE      avg_rating > 8
-GROUP BY   NAME
-ORDER BY   movie_count DESC limit 3 ;
+with top_3_genres as
+         (
+             select genre,
+                    count(m.id)                             as movie_count,
+                    rank() over (order by count(m.id) desc) as genre_rank
+             from movie as m
+                      inner join genre as g
+                                 on g.movie_id = m.id
+                      inner join ratings as r
+                                 on r.movie_id = m.id
+             where avg_rating > 8
+             group by genre
+             limit 3)
+select n.name            as director_name,
+       count(d.movie_id) as movie_count
+from director_mapping as d
+         inner join genre g
+                    using (movie_id)
+         inner join names as n
+                    on n.id = d.name_id
+         inner join top_3_genres
+                    using (genre)
+         inner join ratings
+                    using (movie_id)
+where avg_rating > 8
+group by name
+order by movie_count desc
+limit 3 ;
+
 
 /* James Mangold can be hired as the director for RSVP's next project. Do you remeber his movies, 'Logan' and 'The Wolverine'. 
 Now, let’s find out the top two actors.*/
@@ -689,22 +692,27 @@ from cte;
 +---------------+-------------------+---------------------+----------------------+-----------------+*/
 -- Type your code below:
 
-with cte as (select name,
-       sum(total_votes)                                           as total_votes,
-       count(m.id)                                                as movie_count,
-       round(sum(avg_rating * total_votes) / sum(total_votes), 2) as actress_avg_rating
-from movie m
-         inner join ratings r on m.id = r.movie_id
-         inner join role_mapping rm on m.id = rm.movie_id
-         inner join names n on rm.name_id = n.id
-where languages = 'Hindi'
-  and country = 'India'
-  and category = 'actress'
-group by name
-having movie_count > 2)
-select *, rank() over (order by actress_avg_rating desc, total_votes desc) as actress_rating from cte
-
-
+with actress_summary as
+(
+           select     n.name as actress_name,
+                      total_votes,
+                      count(r.movie_id)                                     as movie_count,
+                      round(sum(avg_rating*total_votes)/sum(total_votes),2) as actress_avg_rating
+           from       movie                                                 as m
+           inner join ratings                                               as r
+           on         m.id=r.movie_id
+           inner join role_mapping as rm
+           on         m.id = rm.movie_id
+           inner join names as n
+           on         rm.name_id = n.id
+           where      category = 'actress'
+           and        country = "india"
+           and        languages like '%hindi%'
+           group by   name
+           having     movie_count>=3 )
+select   *,
+         rank() over(order by actress_avg_rating desc) as actress_rank
+from     actress_summary limit 5;
 
 
 
